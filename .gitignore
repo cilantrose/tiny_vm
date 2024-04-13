@@ -3,6 +3,7 @@
 
 # IDE cruft
 .idea
+__pycache__
 
 
 # Cmake products
@@ -12,6 +13,7 @@ CMakeCache.txt
 Makefile
 bin/test_roll
 bin/tiny_vm
+bin/test_builtins
 cmake_install.cmake
 
 
