@@ -1,8 +1,4 @@
-import os
-import pathlib
-import shutil
-import subprocess
-import sys
+import os, pathlib, shutil, subprocess, sys, functools
 
 from lark import Lark, Transformer, v_args, Tree
 
@@ -34,71 +30,73 @@ ROOT = ".."
 
 @v_args(inline=True)    # Affects the signatures of the methods
 class CalculateTree(Transformer):
-    number = int
+    add = lambda x, left, right: right + left + ["call Int:plus"]
+    sub = lambda x, left, right: right + left + ["call Int:minus"]
+    mul = lambda x, left, right: right + left + ["call Int:multiply"]
+    div = lambda x, left, right: right + left + ["call Int:divide"]
+    # this is the worst code I have ever written
+    neg = lambda x, val: val + ["const 0"] + ["call Int:minus"]
+    number = lambda x, val: [f"const {val}"]
 
+    def __init__(self, program_vars: set):
+        super().__init__()
+        self.vars = {}
+        self.program_vars = program_vars
 
-def install_prereqs():
-    for objfile in ["Bool.json", "Int.json", "Nothing.json", "Obj.json", "String.json"]:
-        origin = pathlib.Path("../OBJ/" + objfile)
-        copied = pathlib.Path("./OBJ/" + objfile)
-        shutil.copyfile(origin, copied)
-    for asmreq in ["asm.conf", "opdefs.txt"]:
-        origin = pathlib.Path("../" + asmreq)
-        copied = pathlib.Path("./" + asmreq)
-        shutil.copyfile(origin, copied)
+    def assign_var(self, name, value):
+        value += [f"store {name}", f"load {name}"]
+        if not self.program_vars.__contains__(name):
+            self.program_vars.add(str(name))
+        self.vars[name] = value
+        return value
+
+    def var(self, name):
+        try:
+            return [f"load {name}"]
+        except KeyError:
+            raise Exception("Variable not found: %s" % name)
 
 
 def main():
-    parser = Lark(grammar, parser="lalr", transformer=CalculateTree())
-    asm = []
+    vars = set()
+    calc = Lark(grammar, parser="lalr", transformer=CalculateTree(vars)).parse
+    expressions = []
 
     with open("calc.txt", "r") as f:
         for line in f:
-            asm += parse_line(parser.parse, line.strip())
+            expressions.append((line.strip(), calc(line.strip())))
 
-    asm.append("const nothing")
-    asm.append("return 0")
     os.makedirs("src", exist_ok=True)
     os.makedirs("OBJ", exist_ok=True)
     with open("src/Calc.asm", "w") as f:
         f.write(".class Calc:Obj\n")
         f.write(".method $constructor\n")
-        for line in asm:
-            f.write(f"    {line}\n")
+        f.write(f".local {functools.reduce(lambda a, b: f'{a},{b}', vars)}\n")
+        for expression in expressions:
+            for asm in expression[1]:
+                f.write(f"    {asm}\n")
+            f.write(f'    const "{expression[0]} => "\n')
+            f.write(f"    call String:print\n")
+            f.write(f"    pop\n")
+            f.write(f"    call Int:print\n")
+            f.write(f'    const "\\n"\n')
+            f.write(f"    call String:print\n")
+            f.write(f"    pop\n")
+            f.write(f"    pop\n")
+        f.write("    const nothing\n")
+        f.write("    return 0")
+
     src = pathlib.Path("src/Calc.asm")
     obj = pathlib.Path(f"{'' if sys.argv.__contains__('--local') else '.'}./OBJ/Calc.json")
-    install_prereqs()
+    for objfile in ["Bool.json", "Int.json", "Nothing.json", "Obj.json", "String.json"]:
+        shutil.copyfile(pathlib.Path("../OBJ/" + objfile), pathlib.Path("./OBJ/" + objfile))
+    for asmreq in ["asm.conf", "opdefs.txt"]:
+        shutil.copyfile(pathlib.Path("../" + asmreq), pathlib.Path("./" + asmreq))
     try:
         proc = subprocess.run(["python3", "../assemble.py", src, obj], text=True)
         proc.check_returncode()
     except subprocess.CalledProcessError:
         sys.stderr.write("Assembler failed to produce object code")
-
-
-def parse_line(calc, expression):
-    asm = []
-    traverse(calc(expression), {"add": "plus", "sub": "minus", "mul": "multiply", "div": "divide"}, asm)
-    asm.append(f'const "{expression} = "')
-    asm.append("call String:print")
-    asm.append("pop")
-    asm.append("call Int:print")
-    asm.append('const "\\n"')
-    asm.append("call String:print")
-    asm.append("pop")
-    asm.append("pop")
-    return asm
-
-
-def traverse(node, translate, asm):
-    if isinstance(node.children[1], int):
-        asm.append(f"const {node.children[1]}")
-    if isinstance(node.children[0], Tree):
-        traverse(node.children[0], translate, asm)
-    else:
-        asm.append(f"const {node.children[0]}")
-    if isinstance(node.children[1], Tree):
-        traverse(node.children[1], translate, asm)
-    asm.append("call Int:" + translate[node.data])
 
 
 if __name__ == '__main__':
