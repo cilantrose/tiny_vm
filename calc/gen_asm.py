@@ -1,6 +1,6 @@
 import os, pathlib, shutil, subprocess, sys, functools
 
-from lark import Lark, Transformer, v_args, Tree
+from lark import Lark, Transformer, v_args
 
 grammar = """
     ?start: sum
@@ -36,6 +36,7 @@ class CalculateTree(Transformer):
     div = lambda x, left, right: right + left + ["call Int:divide"]
     # this is the worst code I have ever written
     neg = lambda x, val: val + ["const 0"] + ["call Int:minus"]
+    var = lambda x, name: [f"load {name}"]
     number = lambda x, val: [f"const {val}"]
 
     def __init__(self, program_vars: set):
@@ -44,17 +45,12 @@ class CalculateTree(Transformer):
         self.program_vars = program_vars
 
     def assign_var(self, name, value):
+        # dumb hack to keep the value of stored var for future computation
         value += [f"store {name}", f"load {name}"]
         if not self.program_vars.__contains__(name):
             self.program_vars.add(str(name))
         self.vars[name] = value
         return value
-
-    def var(self, name):
-        try:
-            return [f"load {name}"]
-        except KeyError:
-            raise Exception("Variable not found: %s" % name)
 
 
 def main():
@@ -69,21 +65,15 @@ def main():
     os.makedirs("src", exist_ok=True)
     os.makedirs("OBJ", exist_ok=True)
     with open("src/Calc.asm", "w") as f:
-        f.write(".class Calc:Obj\n")
-        f.write(".method $constructor\n")
-        f.write(f".local {functools.reduce(lambda a, b: f'{a},{b}', vars)}\n")
+        # write file header
+        f.write(f".class Calc:Obj\n.method $constructor\n.local {functools.reduce(lambda a, b: f'{a},{b}', vars)}\n")
         for expression in expressions:
             for asm in expression[1]:
                 f.write(f"    {asm}\n")
-            f.write(f'    const "{expression[0]} => "\n')
-            f.write(f"    call String:print\n")
-            f.write(f"    pop\n")
+            # generic print statements formatted as expression => result
+            f.write(f'    const "{expression[0]} => "\n    call String:print\n    pop\n')
             f.write(f"    call Int:print\n")
-            f.write(f'    const "\\n"\n')
-            f.write(f"    call String:print\n")
-            f.write(f"    pop\n")
-            f.write(f"    pop\n")
-        f.write("    const nothing\n")
+            f.write(f'    const "\\n"\n    call String:print\n    pop\n    pop\n')
         f.write("    return 0")
 
     src = pathlib.Path("src/Calc.asm")

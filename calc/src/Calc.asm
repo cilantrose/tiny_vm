@@ -1,6 +1,6 @@
 .class Calc:Obj
 .method $constructor
-.local x,b,a
+.local a,b,x
     const 3
     const 2
     const 4
@@ -63,5 +63,23 @@
     call String:print
     pop
     pop
-    const nothing
+    load x
+    const 1
+    load x
+    call Int:plus
+    const 1
+    load x
+    call Int:minus
+    load x
+    call Int:multiply
+    call Int:multiply
+    call Int:minus
+    const "x * (x - 1) * (x + 1) - x => "
+    call String:print
+    pop
+    call Int:print
+    const "\n"
+    call String:print
+    pop
+    pop
     return 0
