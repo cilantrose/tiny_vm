@@ -1,0 +1,10 @@
+# not sure if String:plus should be implemented
+string = "2 + 1 + 2 + 2 = ";
+newline : String = "\n";
+a : Int = 1 + 2;
+# does not actually infer type, just defaults to Int
+c = 2;
+b = 2 + a + c;
+string.print();
+b.print();
+newline.print();

@@ -29,6 +29,9 @@ OBJ/*.json
 
 tests/out/*.txt
 tests/OBJ/*.json
+*.opdefs.txt
+*.asm.conf
+
 # No need to keep built-in classes here;
 # we copy them in from the OBJ directory above
 
